@@ -1,0 +1,100 @@
+---
+title: "Carissa Kinnart HW2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(shiny)
+library(readr)
+```
+
+```{r}
+amazon <- read_csv("https://uwmadison.app.box.com/shared/static/mh931g2f3qudndxkrwvrzfoqzifwjy6p")
+```
+
+
+```{r}
+category_type <- pull(amazon, category)%>%
+  unique()%>%
+  na.omit()
+
+scat_plot <- function(df){ #plot for regular viz based on drop down category
+  ggplot(df)+
+    geom_point(aes(rating, rating_count, size = selected, alpha = selected, col = rating))+
+    scale_y_log10()+
+    scale_color_gradient(low = "blue", high = "red")+
+     scale_size(limits = c(0, 1), range = c(.5, 2), guide = "none") +
+     scale_alpha(limits = c(0, 1), range = c(.1, 1), guide = "none")+
+    ylab("Rating Count")+
+    xlab("Rating")
+}
+
+reset_dist <- function(x, click) { #function used for click plot to calculate distance
+   nearPoints(x, click, allRows = TRUE, addDist = TRUE)$dist_
+ }
+
+scatter <- function(x, dists) { #click plot
+   x %>%
+     mutate(dist = dists) %>%
+     ggplot() +
+     geom_point(aes(rating, rating_count, size = dist, col = rating)) +
+     scale_size(range = c(6, 1))+
+     scale_y_log10()+
+    scale_color_gradient(low = "blue", high = "red")+
+    ylab("Rating Count")+
+    xlab("Rating")
+ }
+```
+
+```{r}
+
+ui <- fluidPage(
+  titlePanel("Amazon Analysis"),
+  selectInput("category_type", "Category Type", category_type, width = "68%"), # width larger so easier to see the drop down menu options better
+  plotOutput("ratings_scatter"),
+  plotOutput("plot", click = "plot_click"),
+  dataTableOutput("table")
+)
+
+server <- function(input, output){
+  cat_subset <- reactive({
+    amazon %>%
+      mutate(selected = 1 * (category %in% input$category_type))
+  })
+  output$ratings_scatter <- renderPlot({
+  scat_plot(cat_subset()) #creating scatterplot with the selected category by user
+  })
+  dist <- reactiveVal(rep(1, nrow(amazon))) #using the dist function to adjust points in plot based on clicks
+   observeEvent(
+     input$plot_click,
+     dist(reset_dist(amazon, input$plot_click))
+   )
+   
+   output$plot <- renderPlot(scatter(amazon, dist())) # creating the click plot
+   output$table <- renderDataTable({
+     amazon %>%
+       mutate(dist = dist()) %>%
+       arrange(dist)
+   })
+}
+
+app <- shinyApp(ui, server)
+app
+```
+
+
+The dataset I decided to create an interactive visualization for was an amazon product rating from Kaggle. This topic was interesting to me as I wanted to explore information on e-commerce. After viewing the 16 columns, I wanted to explore ratings and rating counts for certain product categories. Because there is such a volume of different categories, I thought it would be interesting to perform exploratory analysis on how certain categories performed in product reviews.
+
+I wanted to first create an interface where you could choose a unique category in the drop down menu, and see the ratings and rating count for that specific category. After noting that there were over 200 categories, I wanted to make a separate interactive graph that you could click over to see what products had certain ratings that a table under it could specifically show the user. That way, all the ratings would be on display with their respective counts so a user could visually see the bigger picture.
+
+The amazon dataset was interesting because there are so many products on the site. However, I underestimated the number of unique categories which was over 200, so quite unexpected. After creating the visualization, I found that one of the categories with the highest ratings were home and kitchen products when the table showed those as the top 3. 
+
+
+The reactive graph structure of the application is quite logical. My title page describes where the information comes from and the drop down selection is titled so the user knows that they can choose a category from Amazon products. The graph points are colored based on ratings, just to make it a bit easier to understand the rating value. For the click graph, the points grow based on distance clicked, in return displaying the data table with the top 25 entries closest to the click. 
+
